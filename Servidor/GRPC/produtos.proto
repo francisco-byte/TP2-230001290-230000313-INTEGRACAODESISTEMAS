@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+service ProdutoService {
+  rpc UpdateProduto (Produto) returns (Resposta);
+}
+
+message Produto {
+  int32 id = 1;
+  string name = 2;
+  float price = 3;
+  int32 stock = 4;
+}
+
+message Resposta {
+  string mensagem = 1;
+}

@@ -1,0 +1,30 @@
+services:
+  rest:
+    build: ./Servidor/REST
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./Servidor/shared:/shared  
+  soap:
+    build: ./Servidor/SOAP
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./Servidor/shared:/shared  
+  graphql:
+    build: ./Servidor/GraphQL
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./Servidor/shared:/shared  
+  grpc:
+    build: ./Servidor/GRPC
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./Servidor/shared:/shared  
+  shared:
+    image: alpine
+    volumes:
+      - ./Servidor/shared:/shared
+    command: tail -f /dev/null

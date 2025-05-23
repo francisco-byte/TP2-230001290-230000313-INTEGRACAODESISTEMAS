@@ -1,0 +1,2 @@
+spyne
+lxml
