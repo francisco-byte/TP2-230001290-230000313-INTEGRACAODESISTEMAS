@@ -47,7 +47,7 @@ async def handle_api_request(action, data):
             return {"action": "list_soap", "success": True, "data": json.loads(produtos)}
         
         elif action == "update_grpc":
-            # Import gRPC modules (you'll need to ensure these are available)
+            # Now we can use the actual gRPC implementation
             try:
                 import grpc
                 import produtos_pb2
@@ -58,8 +58,8 @@ async def handle_api_request(action, data):
                 req = produtos_pb2.Produto(**data)
                 res = stub.UpdateProduto(req)
                 return {"action": "update_grpc", "success": True, "data": {"mensagem": res.mensagem}}
-            except ImportError as e:
-                return {"action": "update_grpc", "success": False, "error": f"gRPC modules not available: {str(e)}"}
+            except Exception as grpc_error:
+                return {"action": "update_grpc", "success": False, "error": f"gRPC error: {str(grpc_error)}"}
         
         elif action == "delete_graphql":
             import requests
@@ -80,7 +80,8 @@ async def handle_api_request(action, data):
         logger.error(f"Error handling API request {action}: {str(e)}")
         return {"action": action, "success": False, "error": str(e)}
 
-async def handler(websocket, path):
+async def handle_websocket(websocket):
+    """Handle individual WebSocket connections"""
     await register(websocket)
     try:
         async for message in websocket:
@@ -99,10 +100,13 @@ async def handler(websocket, path):
             except json.JSONDecodeError:
                 await websocket.send(json.dumps({"error": "Invalid JSON"}))
             except Exception as e:
+                logger.error(f"Error in message handling: {str(e)}")
                 await websocket.send(json.dumps({"error": str(e)}))
                 
     except websockets.ConnectionClosed:
         logger.info("Client disconnected")
+    except Exception as e:
+        logger.error(f"Error in websocket handler: {str(e)}")
     finally:
         await unregister(websocket)
 
@@ -118,8 +122,12 @@ def rabbitmq_callback(message):
         logger.error(f"Error in rabbitmq_callback: {str(e)}")
 
 def start_rabbitmq_consumer():
-    while True:
+    retry_count = 0
+    max_retries = 10
+    
+    while retry_count < max_retries:
         try:
+            logger.info(f"Attempting to connect to RabbitMQ (attempt {retry_count + 1}/{max_retries})")
             credentials = pika.PlainCredentials('admin', 'admin')
             connection = pika.BlockingConnection(
                 pika.ConnectionParameters('rabbitmq', credentials=credentials)
@@ -139,19 +147,29 @@ def start_rabbitmq_consumer():
             channel.basic_qos(prefetch_count=1)
             channel.basic_consume(queue='product_updates', on_message_callback=on_message)
             logger.info('RabbitMQ consumer started, waiting for messages...')
+            retry_count = 0  # Reset retry count on successful connection
             channel.start_consuming()
             
         except Exception as e:
-            logger.error(f"RabbitMQ connection error: {str(e)}")
-            time.sleep(5)
+            retry_count += 1
+            logger.error(f"RabbitMQ connection error (attempt {retry_count}): {str(e)}")
+            if retry_count < max_retries:
+                wait_time = min(30, 5 * retry_count)  # Exponential backoff, max 30s
+                logger.info(f"Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                logger.error("Max retries reached. RabbitMQ consumer will not be available.")
+                break
 
 async def main():
-    server = await websockets.serve(handler, "0.0.0.0", 6789)
+    # Start WebSocket server with the new handler approach
+    server = await websockets.serve(handle_websocket, "0.0.0.0", 6789)
     logger.info("WebSocket server started on ws://0.0.0.0:6789")
 
     # Start RabbitMQ consumer in a separate thread
     threading.Thread(target=start_rabbitmq_consumer, daemon=True).start()
 
+    # Keep the server running
     await server.wait_closed()
 
 if __name__ == "__main__":

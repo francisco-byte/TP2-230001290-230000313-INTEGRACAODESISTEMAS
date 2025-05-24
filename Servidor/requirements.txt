@@ -11,3 +11,4 @@ pymongo
 websockets
 pika
 requests
+zeep
