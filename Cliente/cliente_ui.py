@@ -56,6 +56,7 @@ def remover_produto_graphql():
             '''
         }
         res = requests.post("http://localhost:8004/graphql", json=query)
+        res = requests.post("http://localhost:8004/graphql", json=query)
         data = res.json()
         mostrar_resposta(data["data"])
     except Exception as e:
@@ -142,6 +143,16 @@ tk.Button(root, text="Criar (REST)", command=criar_produto_rest).grid(row=4, col
 tk.Button(root, text="Listar (SOAP)", command=listar_produtos_soap).grid(row=4, column=1)
 tk.Button(root, text="Atualizar (gRPC)", command=atualizar_produto_grpc).grid(row=5, column=0)
 tk.Button(root, text="Remover (GraphQL)", command=remover_produto_graphql).grid(row=5, column=1)
+
+# Status Labels for WebSocket and RabbitMQ
+ws_status_var = tk.StringVar(value="Disconnected")
+rabbitmq_status_var = tk.StringVar(value="Unknown")
+
+tk.Label(root, text="WebSocket Status:").grid(row=6, column=0, sticky="w")
+tk.Label(root, textvariable=ws_status_var).grid(row=6, column=1, sticky="w")
+
+tk.Label(root, text="RabbitMQ Status:").grid(row=7, column=0, sticky="w")
+tk.Label(root, textvariable=rabbitmq_status_var).grid(row=7, column=1, sticky="w")
 
 # Status Labels for WebSocket and RabbitMQ
 ws_status_var = tk.StringVar(value="Disconnected")
