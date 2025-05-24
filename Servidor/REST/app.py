@@ -1,12 +1,19 @@
 from flask import Flask, request, jsonify
 import json
 import os
+from jsonschema import validate, ValidationError
 
 app = Flask(__name__)
 
 # Caminho absoluto para o arquivo 'produtos.json' na pasta 'shared'
 SHARED_DIR = '/shared'  # Diretório compartilhado mapeado no contêiner
 DATA_FILE = os.path.join(SHARED_DIR, 'produtos.json')
+SCHEMA_FILE = os.path.join(os.path.dirname(__file__), 'schema.json')
+
+def carregar_schema():
+    """Carrega o schema JSON para validação."""
+    with open(SCHEMA_FILE, 'r') as f:
+        return json.load(f)
 
 def carregar_dados():
     """Carrega os dados do arquivo 'produtos.json'."""
@@ -28,6 +35,11 @@ def create_produto():
     """Cria um novo produto no arquivo 'produtos.json'."""
     try:
         produto = request.json
+        
+        # Validar o produto contra o schema
+        schema = carregar_schema()
+        validate(instance=produto, schema=schema)
+        
         produtos = carregar_dados()
 
         # Evita produtos com o mesmo ID
@@ -37,6 +49,8 @@ def create_produto():
         produtos.append(produto)
         salvar_dados(produtos)
         return jsonify({'mensagem': f"Produto {produto['name']} criado com sucesso!"})
+    except ValidationError as e:
+        return jsonify({'erro': f'Dados inválidos: {e.message}'}), 400
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
