@@ -8,3 +8,5 @@ fastapi
 uvicorn
 strawberry-graphql
 pymongo
+websockets
+pika

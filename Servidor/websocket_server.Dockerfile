@@ -4,6 +4,6 @@ WORKDIR /app
 
 COPY websocket_server.py /app/websocket_server.py
 
-RUN pip install websockets
+RUN pip install websockets pika
 
 CMD ["python", "websocket_server.py"]
