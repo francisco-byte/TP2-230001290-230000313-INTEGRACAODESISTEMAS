@@ -263,8 +263,8 @@ Dentro da pasta documentacao/ encontra-se um vídeo demonstrativo que mostra o f
 
 ---
 
-## 👤 Autor
+## 👤 Autores
 
-Projeto desenvolvido por **Francisco Carvalho dos Reis**, no contexto da disciplina de **Integração de Sistemas** do Instituto Politécnico de Santarém.
+Projeto desenvolvido por **Francisco Carvalho dos Reis** e **Ricardo Félix da Silva**, no contexto da disciplina de **Integração de Sistemas** do Instituto Politécnico de Santarém.
 
 ---
