@@ -1,6 +1,8 @@
+version: '3.8'
+
 services:
   mongodb:
-    image: mongo:latest
+    image: mongo:7.0
     ports:
       - "27017:27017"
     volumes:
@@ -9,7 +11,7 @@ services:
       MONGO_INITDB_DATABASE: produtos_db
 
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.12-management
     ports:
       - "5672:5672"    # RabbitMQ main port
       - "15672:15672"  # Management UI
@@ -28,10 +30,6 @@ services:
     depends_on:
       - mongodb
       - rabbitmq
-    environment:
-      - RABBITMQ_USER=admin
-      - RABBITMQ_PASS=admin
-      - RABBITMQ_HOST=rabbitmq
 
   soap:
     build:
@@ -42,10 +40,6 @@ services:
     depends_on:
       - mongodb
       - rabbitmq
-    environment:
-      - RABBITMQ_USER=admin
-      - RABBITMQ_PASS=admin
-      - RABBITMQ_HOST=rabbitmq
       
   graphql:
     build:
@@ -56,10 +50,6 @@ services:
     depends_on:
       - mongodb
       - rabbitmq
-    environment:
-      - RABBITMQ_USER=admin
-      - RABBITMQ_PASS=admin
-      - RABBITMQ_HOST=rabbitmq
       
   grpc:
     build:
@@ -70,35 +60,11 @@ services:
     depends_on:
       - mongodb
       - rabbitmq
-    environment:
-      - RABBITMQ_USER=admin
-      - RABBITMQ_PASS=admin
-      - RABBITMQ_HOST=rabbitmq
 
   websocket:
     build:
       context: ./Servidor
       dockerfile: WebSockets/Dockerfile
-    ports:
-      - "6789:6789"
-    depends_on:
-      - rabbitmq
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-
-  websocket_server:
-    build:
-      context: ./Servidor
-      dockerfile: websocket_server.Dockerfile
     ports:
       - "6789:6789"
     depends_on:

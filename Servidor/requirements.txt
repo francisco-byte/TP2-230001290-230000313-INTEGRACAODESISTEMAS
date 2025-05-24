@@ -10,3 +10,4 @@ strawberry-graphql
 pymongo
 websockets
 pika
+requests
