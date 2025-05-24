@@ -2,23 +2,19 @@ from spyne import Application, rpc, ServiceBase, Unicode
 from spyne.protocol.soap import Soap11
 from spyne.server.wsgi import WsgiApplication
 import json
-import os
+from pymongo import MongoClient
+from bson import ObjectId
 
-# Caminho absoluto para o arquivo 'produtos.json' no contêiner
-SHARED_DIR = '/shared'  # Diretório compartilhado mapeado no contêiner
-DATA_FILE = os.path.join(SHARED_DIR, 'produtos.json')  # Caminho completo para o arquivo 'produtos.json'
-
-def carregar_dados():
-    """Carrega os dados do arquivo 'produtos.json'."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    return []  # Retorna uma lista vazia caso o arquivo não exista
+# MongoDB connection
+client = MongoClient('mongodb://mongodb:27017/')
+db = client['produtos_db']
+collection = db['produtos']
 
 class ProdutoReadService(ServiceBase):
     @rpc(_returns=Unicode)
     def read_all(ctx):  # Método para retornar todos os produtos
-        produtos = carregar_dados()  # Carrega os produtos
+        # Buscar todos os produtos no MongoDB
+        produtos = list(collection.find({}, {'_id': 0}))  # Excluir o campo _id do resultado
         return json.dumps(produtos)  # Retorna os produtos em formato JSON
 
 # Configuração do aplicativo SOAP

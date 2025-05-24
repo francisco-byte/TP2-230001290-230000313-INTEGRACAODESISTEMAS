@@ -5,6 +5,7 @@ import json
 from zeep import Client as SoapClient
 import produtos_pb2
 import produtos_pb2_grpc
+import time
 
 def get_input():
     return {
@@ -14,17 +15,37 @@ def get_input():
         "stock": int(entry_stock.get())
     }
 
+def check_service_health(url):
+    """Check if a service is available"""
+    try:
+        response = requests.get(url, timeout=5)
+        return True
+    except:
+        return False
+
 def criar_produto_rest():
     produto = get_input()
     try:
-        res = requests.post("http://192.168.246.44:8001/create", json=produto)
+        # Check if service is available first
+        if not check_service_health("http://localhost:8001"):
+            mostrar_resposta({"erro": "Serviço REST não está disponível. Verifique se o Docker está rodando."})
+            return
+            
+        res = requests.post("http://localhost:8001/create", json=produto, timeout=10)
         mostrar_resposta(res.json())
+    except requests.exceptions.ConnectionError:
+        mostrar_resposta({"erro": "Não foi possível conectar ao serviço REST. Verifique se o Docker está rodando."})
     except Exception as e:
         mostrar_resposta({"erro": str(e)})
 
 def listar_produtos_soap():
     try:
-        client = SoapClient("http://192.168.246.44:8002/?wsdl")
+        # Check if service is available first
+        if not check_service_health("http://localhost:8002"):
+            mostrar_resposta({"erro": "Serviço SOAP não está disponível. Verifique se o Docker está rodando."})
+            return
+            
+        client = SoapClient("http://localhost:8002/?wsdl")
         produtos = client.service.read_all()
         mostrar_resposta(json.loads(produtos))
     except Exception as e:
@@ -33,17 +54,27 @@ def listar_produtos_soap():
 def atualizar_produto_grpc():
     produto = get_input()
     try:
-        channel = grpc.insecure_channel('192.168.246.44:8003')
+        channel = grpc.insecure_channel('localhost:8003')
+        # Add a timeout and check if channel is ready
+        grpc.channel_ready_future(channel).result(timeout=10)
+        
         stub = produtos_pb2_grpc.ProdutoServiceStub(channel)
         req = produtos_pb2.Produto(**produto)
         res = stub.UpdateProduto(req)
         mostrar_resposta({"mensagem": res.mensagem})
+    except grpc.RpcError as e:
+        mostrar_resposta({"erro": f"Erro gRPC: {e.details()}"})
     except Exception as e:
         mostrar_resposta({"erro": str(e)})
 
 def remover_produto_graphql():
     id_produto = int(entry_id.get())
     try:
+        # Check if service is available first
+        if not check_service_health("http://localhost:8004"):
+            mostrar_resposta({"erro": "Serviço GraphQL não está disponível. Verifique se o Docker está rodando."})
+            return
+            
         query = {
             "query": f'''
                 mutation {{
@@ -51,9 +82,11 @@ def remover_produto_graphql():
                 }}
             '''
         }
-        res = requests.post("http://192.168.246.44:8004/graphql", json=query)
+        res = requests.post("http://localhost:8004/graphql", json=query, timeout=10)
         data = res.json()
         mostrar_resposta(data["data"])
+    except requests.exceptions.ConnectionError:
+        mostrar_resposta({"erro": "Não foi possível conectar ao serviço GraphQL. Verifique se o Docker está rodando."})
     except Exception as e:
         mostrar_resposta({"erro": str(e)})
 

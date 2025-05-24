@@ -2,12 +2,16 @@ from flask import Flask, request, jsonify
 import json
 import os
 from jsonschema import validate, ValidationError
+from pymongo import MongoClient
+from bson import ObjectId
 
 app = Flask(__name__)
 
-# Caminho absoluto para o arquivo 'produtos.json' na pasta 'shared'
-SHARED_DIR = '/shared'  # Diretório compartilhado mapeado no contêiner
-DATA_FILE = os.path.join(SHARED_DIR, 'produtos.json')
+# MongoDB connection
+client = MongoClient('mongodb://mongodb:27017/')
+db = client['produtos_db']
+collection = db['produtos']
+
 SCHEMA_FILE = os.path.join(os.path.dirname(__file__), 'schema.json')
 
 def carregar_schema():
@@ -15,24 +19,9 @@ def carregar_schema():
     with open(SCHEMA_FILE, 'r') as f:
         return json.load(f)
 
-def carregar_dados():
-    """Carrega os dados do arquivo 'produtos.json'."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    return []
-
-def salvar_dados(dados):
-    """Salva os dados no arquivo 'produtos.json'."""
-    try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(dados, f, indent=2)
-    except Exception as e:
-        print(f"Erro ao salvar dados: {e}")
-
 @app.route('/create', methods=['POST'])
 def create_produto():
-    """Cria um novo produto no arquivo 'produtos.json'."""
+    """Cria um novo produto no MongoDB."""
     try:
         produto = request.json
         
@@ -40,17 +29,15 @@ def create_produto():
         schema = carregar_schema()
         validate(instance=produto, schema=schema)
         
-        produtos = carregar_dados()
+        # Verificar se já existe produto com mesmo ID
+        if collection.find_one({'id': produto['id']}):
+            return jsonify({'erro': 'ID ja existente'}), 400
 
-        # Evita produtos com o mesmo ID
-        if any(p['id'] == produto['id'] for p in produtos):
-            return jsonify({'erro': 'ID já existente'}), 400
-
-        produtos.append(produto)
-        salvar_dados(produtos)
-        return jsonify({'mensagem': f"Produto {produto['name']} criado com sucesso!"})
+        # Inserir produto no MongoDB
+        result = collection.insert_one(produto)
+        return jsonify({'mensagem': f"Produto {produto['name']} criado com sucesso!", 'mongodb_id': str(result.inserted_id)})
     except ValidationError as e:
-        return jsonify({'erro': f'Dados inválidos: {e.message}'}), 400
+        return jsonify({'erro': f'Dados invalidos: {e.message}'}), 400
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 

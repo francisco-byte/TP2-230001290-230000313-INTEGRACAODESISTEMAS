@@ -1,30 +1,48 @@
 services:
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: produtos_db
+
   rest:
-    build: ./Servidor/REST
+    build:
+      context: ./Servidor
+      dockerfile: REST/Dockerfile
     ports:
       - "8001:8001"
-    volumes:
-      - ./Servidor/shared:/shared  
+    depends_on:
+      - mongodb
+      
   soap:
-    build: ./Servidor/SOAP
+    build:
+      context: ./Servidor
+      dockerfile: SOAP/Dockerfile
     ports:
       - "8002:8002"
-    volumes:
-      - ./Servidor/shared:/shared  
+    depends_on:
+      - mongodb
+      
   graphql:
-    build: ./Servidor/GraphQL
+    build:
+      context: ./Servidor
+      dockerfile: GraphQL/Dockerfile
     ports:
       - "8004:8004"
-    volumes:
-      - ./Servidor/shared:/shared  
+    depends_on:
+      - mongodb
+      
   grpc:
-    build: ./Servidor/GRPC
+    build:
+      context: ./Servidor
+      dockerfile: GRPC/Dockerfile
     ports:
       - "8003:8003"
-    volumes:
-      - ./Servidor/shared:/shared  
-  shared:
-    image: alpine
-    volumes:
-      - ./Servidor/shared:/shared
-    command: tail -f /dev/null
+    depends_on:
+      - mongodb
+
+volumes:
+  mongodb_data:

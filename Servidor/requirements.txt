@@ -1,0 +1,10 @@
+spyne
+lxml
+flask
+jsonschema
+grpcio
+grpcio-tools
+fastapi
+uvicorn
+strawberry-graphql
+pymongo
