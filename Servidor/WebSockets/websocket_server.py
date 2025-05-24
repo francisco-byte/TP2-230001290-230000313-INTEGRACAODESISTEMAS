@@ -47,7 +47,11 @@ def rabbitmq_callback(message):
         logger.error("Event loop is not running, cannot notify clients")
 
 def start_rabbitmq_consumer():
-    connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
+    # Add credentials for RabbitMQ connection
+    credentials = pika.PlainCredentials('admin', 'admin')
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters('rabbitmq', credentials=credentials)
+    )
     channel = connection.channel()
     channel.queue_declare(queue='product_updates', durable=True)
 

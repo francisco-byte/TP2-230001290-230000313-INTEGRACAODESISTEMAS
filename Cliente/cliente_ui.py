@@ -5,6 +5,9 @@ import json
 from zeep import Client as SoapClient
 import produtos_pb2
 import produtos_pb2_grpc
+import threading
+import websocket
+import pika
 import time
 
 def get_input():
@@ -15,36 +18,16 @@ def get_input():
         "stock": int(entry_stock.get())
     }
 
-def check_service_health(url):
-    """Check if a service is available"""
-    try:
-        response = requests.get(url, timeout=5)
-        return True
-    except:
-        return False
-
 def criar_produto_rest():
     produto = get_input()
     try:
-        # Check if service is available first
-        if not check_service_health("http://localhost:8001"):
-            mostrar_resposta({"erro": "Serviço REST não está disponível. Verifique se o Docker está rodando."})
-            return
-            
-        res = requests.post("http://localhost:8001/create", json=produto, timeout=10)
+        res = requests.post("http://localhost:8001/create", json=produto)
         mostrar_resposta(res.json())
-    except requests.exceptions.ConnectionError:
-        mostrar_resposta({"erro": "Não foi possível conectar ao serviço REST. Verifique se o Docker está rodando."})
     except Exception as e:
         mostrar_resposta({"erro": str(e)})
 
 def listar_produtos_soap():
     try:
-        # Check if service is available first
-        if not check_service_health("http://localhost:8002"):
-            mostrar_resposta({"erro": "Serviço SOAP não está disponível. Verifique se o Docker está rodando."})
-            return
-            
         client = SoapClient("http://localhost:8002/?wsdl")
         produtos = client.service.read_all()
         mostrar_resposta(json.loads(produtos))
@@ -55,26 +38,16 @@ def atualizar_produto_grpc():
     produto = get_input()
     try:
         channel = grpc.insecure_channel('localhost:8003')
-        # Add a timeout and check if channel is ready
-        grpc.channel_ready_future(channel).result(timeout=10)
-        
         stub = produtos_pb2_grpc.ProdutoServiceStub(channel)
         req = produtos_pb2.Produto(**produto)
         res = stub.UpdateProduto(req)
         mostrar_resposta({"mensagem": res.mensagem})
-    except grpc.RpcError as e:
-        mostrar_resposta({"erro": f"Erro gRPC: {e.details()}"})
     except Exception as e:
         mostrar_resposta({"erro": str(e)})
 
 def remover_produto_graphql():
     id_produto = int(entry_id.get())
     try:
-        # Check if service is available first
-        if not check_service_health("http://localhost:8004"):
-            mostrar_resposta({"erro": "Serviço GraphQL não está disponível. Verifique se o Docker está rodando."})
-            return
-            
         query = {
             "query": f'''
                 mutation {{
@@ -82,17 +55,67 @@ def remover_produto_graphql():
                 }}
             '''
         }
-        res = requests.post("http://localhost:8004/graphql", json=query, timeout=10)
+        res = requests.post("http://localhost:8004/graphql", json=query)
         data = res.json()
         mostrar_resposta(data["data"])
-    except requests.exceptions.ConnectionError:
-        mostrar_resposta({"erro": "Não foi possível conectar ao serviço GraphQL. Verifique se o Docker está rodando."})
     except Exception as e:
         mostrar_resposta({"erro": str(e)})
 
 def mostrar_resposta(data):
     text_output.delete(1.0, tk.END)
     text_output.insert(tk.END, json.dumps(data, indent=2))
+
+def update_ws_status(status):
+    ws_status_var.set(status)
+
+def update_rabbitmq_status(status):
+    rabbitmq_status_var.set(status)
+
+def on_message(ws, message):
+    data = json.loads(message)
+    mostrar_resposta({"websocket_update": data})
+
+def on_error(ws, error):
+    mostrar_resposta({"websocket_error": str(error)})
+    update_ws_status("Error")
+
+def on_close(ws, close_status_code, close_msg):
+    mostrar_resposta({"websocket_closed": f"Code: {close_status_code}, Message: {close_msg}"})
+    update_ws_status("Closed")
+
+def on_open(ws):
+    mostrar_resposta({"websocket": "Connection opened"})
+    update_ws_status("Connected")
+
+def start_websocket():
+    ws = websocket.WebSocketApp("ws://localhost:6789/",
+                                on_message=on_message,
+                                on_error=on_error,
+                                on_close=on_close)
+    ws.on_open = on_open
+    ws.run_forever()
+
+def start_rabbitmq_consumer():
+    def callback(ch, method, properties, body):
+        message = json.loads(body)
+        mostrar_resposta({"rabbitmq_update": message})
+        update_rabbitmq_status("Message received")
+
+    while True:
+        try:
+            # Adicionar credenciais para conexão RabbitMQ
+            credentials = pika.PlainCredentials('admin', 'admin')
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters('localhost', credentials=credentials)
+            )
+            channel = connection.channel()
+            channel.queue_declare(queue='product_updates', durable=True)
+            channel.basic_consume(queue='product_updates', on_message_callback=callback, auto_ack=True)
+            update_rabbitmq_status("Connected")
+            channel.start_consuming()
+        except Exception as e:
+            update_rabbitmq_status(f"Error: {str(e)}")
+            time.sleep(5)  # retry after delay
 
 # ----------------- UI -----------------
 root = tk.Tk()
@@ -120,8 +143,28 @@ tk.Button(root, text="Listar (SOAP)", command=listar_produtos_soap).grid(row=4, 
 tk.Button(root, text="Atualizar (gRPC)", command=atualizar_produto_grpc).grid(row=5, column=0)
 tk.Button(root, text="Remover (GraphQL)", command=remover_produto_graphql).grid(row=5, column=1)
 
+# Status Labels for WebSocket and RabbitMQ
+ws_status_var = tk.StringVar(value="Disconnected")
+rabbitmq_status_var = tk.StringVar(value="Unknown")
+
+tk.Label(root, text="WebSocket Status:").grid(row=6, column=0, sticky="w")
+tk.Label(root, textvariable=ws_status_var).grid(row=6, column=1, sticky="w")
+
+tk.Label(root, text="RabbitMQ Status:").grid(row=7, column=0, sticky="w")
+tk.Label(root, textvariable=rabbitmq_status_var).grid(row=7, column=1, sticky="w")
+
 # Resultado
 text_output = tk.Text(root, height=15, width=60)
-text_output.grid(row=6, column=0, columnspan=2, padx=10, pady=10)
+text_output.grid(row=8, column=0, columnspan=2, padx=10, pady=10)
+
+# Start WebSocket client in a separate thread
+ws_thread = threading.Thread(target=start_websocket)
+ws_thread.daemon = True
+ws_thread.start()
+
+# Start RabbitMQ consumer in a separate thread
+rabbitmq_thread = threading.Thread(target=start_rabbitmq_consumer)
+rabbitmq_thread.daemon = True
+rabbitmq_thread.start()
 
 root.mainloop()

@@ -8,6 +8,17 @@ services:
     environment:
       MONGO_INITDB_DATABASE: produtos_db
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"    # RabbitMQ main port
+      - "15672:15672"  # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
   rest:
     build:
       context: ./Servidor
@@ -16,7 +27,12 @@ services:
       - "8001:8001"
     depends_on:
       - mongodb
-      
+      - rabbitmq
+    environment:
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+      - RABBITMQ_HOST=rabbitmq
+
   soap:
     build:
       context: ./Servidor
@@ -25,6 +41,11 @@ services:
       - "8002:8002"
     depends_on:
       - mongodb
+      - rabbitmq
+    environment:
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+      - RABBITMQ_HOST=rabbitmq
       
   graphql:
     build:
@@ -34,6 +55,11 @@ services:
       - "8004:8004"
     depends_on:
       - mongodb
+      - rabbitmq
+    environment:
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+      - RABBITMQ_HOST=rabbitmq
       
   grpc:
     build:
@@ -43,6 +69,23 @@ services:
       - "8003:8003"
     depends_on:
       - mongodb
+      - rabbitmq
+    environment:
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+      - RABBITMQ_HOST=rabbitmq
+
+  websocket:
+    build:
+      context: ./Servidor
+      dockerfile: WebSockets/Dockerfile
+    ports:
+      - "6789:6789"
+    depends_on:
+      - rabbitmq
+    environment:
+      - RABBITMQ_HOST=rabbitmq
 
 volumes:
   mongodb_data:
+  rabbitmq_data:
