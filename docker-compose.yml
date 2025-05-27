@@ -9,28 +9,19 @@ services:
       - mongodb_data:/data/db
     environment:
       MONGO_INITDB_DATABASE: produtos_db
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 10s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+    restart: unless-stopped
 
   rabbitmq:
-    image: rabbitmq:3.12-management
+    image: rabbitmq:3.13-management
     ports:
-      - "5672:5672"    # RabbitMQ main port
-      - "15672:15672"  # Management UI
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 30s
-      timeout: 30s
-      retries: 3
+    restart: unless-stopped
 
   rest:
     build:
@@ -39,10 +30,8 @@ services:
     ports:
       - "8001:8001"
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
 
   soap:
     build:
@@ -51,10 +40,8 @@ services:
     ports:
       - "8002:8002"
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
       
   graphql:
     build:
@@ -63,10 +50,8 @@ services:
     ports:
       - "8004:8004"
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
       
   grpc:
     build:
@@ -75,10 +60,8 @@ services:
     ports:
       - "8003:8003"
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
 
   websocket:
     build:
@@ -87,8 +70,11 @@ services:
     ports:
       - "6789:6789"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      - rest
+      - soap
+      - graphql
+      - grpc
+      - rabbitmq
     restart: unless-stopped
 
 volumes:
