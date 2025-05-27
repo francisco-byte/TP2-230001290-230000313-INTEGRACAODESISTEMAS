@@ -12,3 +12,5 @@ websocket-client
 pika
 requests
 zeep
+PyJWT
+cryptography

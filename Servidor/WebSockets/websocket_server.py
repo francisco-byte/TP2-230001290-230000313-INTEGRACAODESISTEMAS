@@ -5,49 +5,125 @@ import pika
 import threading
 import logging
 import time
+import requests
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-connected_clients = set()
+connected_clients = {}  # Changed to dict to store client info
+
+# Simple authentication without external dependencies
+def simple_authenticate(username, password):
+    """Simple authentication - no JWT needed"""
+    users = {
+        "admin": {"password": "admin123", "permissions": ["create", "read", "update", "delete"]},
+        "user": {"password": "user123", "permissions": ["create", "read", "update"]},
+        "readonly": {"password": "readonly123", "permissions": ["read"]}
+    }
+    
+    user = users.get(username)
+    if user and user["password"] == password:
+        return user["permissions"]
+    return None
 
 async def notify_clients(message):
     if connected_clients:
         message_data = json.dumps(message)
-        # Use asyncio.gather instead of asyncio.wait for better error handling
-        if connected_clients:
+        # Only notify authenticated clients
+        authenticated_clients = [ws for ws, info in connected_clients.items() 
+                               if info.get('authenticated', False)]
+        if authenticated_clients:
             await asyncio.gather(
-                *[client.send(message_data) for client in connected_clients],
+                *[client.send(message_data) for client in authenticated_clients],
                 return_exceptions=True
             )
 
 async def register(websocket):
-    connected_clients.add(websocket)
+    connected_clients[websocket] = {'authenticated': False, 'permissions': []}
     logger.info(f"Client connected: {websocket.remote_address}")
-    await websocket.send(json.dumps({"status": "connected"}))
+    await websocket.send(json.dumps({
+        "status": "connected", 
+        "message": "Send 'auth' action to authenticate"
+    }))
 
 async def unregister(websocket):
     if websocket in connected_clients:
-        connected_clients.remove(websocket)
+        del connected_clients[websocket]
     logger.info(f"Client disconnected: {websocket.remote_address}")
 
-async def handle_api_request(action, data):
+async def handle_authentication(websocket, data):
+    """Handle authentication"""
+    username = data.get('username')
+    password = data.get('password')
+    
+    permissions = simple_authenticate(username, password)
+    if permissions:
+        connected_clients[websocket] = {
+            'authenticated': True,
+            'username': username,
+            'permissions': permissions
+        }
+        await websocket.send(json.dumps({
+            "action": "auth",
+            "success": True,
+            "message": f"Authenticated as {username}",
+            "permissions": permissions
+        }))
+        logger.info(f"User {username} authenticated")
+    else:
+        await websocket.send(json.dumps({
+            "action": "auth",
+            "success": False,
+            "message": "Invalid credentials"
+        }))
+
+def check_permission(websocket, required_action):
+    """Check if user has permission for action"""
+    client_info = connected_clients.get(websocket, {})
+    if not client_info.get('authenticated'):
+        return False, "Not authenticated"
+    
+    action_permissions = {
+        "create_rest": "create",
+        "list_soap": "read",
+        "update_grpc": "update", 
+        "delete_graphql": "delete"
+    }
+    
+    required_perm = action_permissions.get(required_action)
+    if required_perm and required_perm in client_info.get('permissions', []):
+        return True, None
+    
+    return False, f"Permission denied. Required: {required_perm}"
+
+async def handle_api_request(websocket, action, data):
     """Handle API requests through WebSocket"""
     try:
+        # Check authentication and permissions
+        has_permission, error_msg = check_permission(websocket, action)
+        if not has_permission:
+            await websocket.send(json.dumps({
+                "action": action,
+                "success": False,
+                "error": error_msg
+            }))
+            return
+
         if action == "create_rest":
-            import requests
             response = requests.post("http://rest:8001/create", json=data, timeout=10)
-            return {"action": "create_rest", "success": True, "data": response.json()}
+            result = {"action": "create_rest", "success": True, "data": response.json()}
         
         elif action == "list_soap":
-            from zeep import Client as SoapClient
-            client = SoapClient("http://soap:8002/?wsdl")
-            produtos = client.service.read_all()
-            return {"action": "list_soap", "success": True, "data": json.loads(produtos)}
+            try:
+                from zeep import Client as SoapClient
+                client = SoapClient("http://soap:8002/?wsdl")
+                produtos = client.service.read_all()
+                result = {"action": "list_soap", "success": True, "data": json.loads(produtos)}
+            except Exception as soap_error:
+                result = {"action": "list_soap", "success": False, "error": f"SOAP error: {str(soap_error)}"}
         
         elif action == "update_grpc":
-            # Now we can use the actual gRPC implementation
             try:
                 import grpc
                 import produtos_pb2
@@ -57,12 +133,11 @@ async def handle_api_request(action, data):
                 stub = produtos_pb2_grpc.ProdutoServiceStub(channel)
                 req = produtos_pb2.Produto(**data)
                 res = stub.UpdateProduto(req)
-                return {"action": "update_grpc", "success": True, "data": {"mensagem": res.mensagem}}
+                result = {"action": "update_grpc", "success": True, "data": {"mensagem": res.mensagem}}
             except Exception as grpc_error:
-                return {"action": "update_grpc", "success": False, "error": f"gRPC error: {str(grpc_error)}"}
+                result = {"action": "update_grpc", "success": False, "error": f"gRPC error: {str(grpc_error)}"}
         
         elif action == "delete_graphql":
-            import requests
             query = {
                 "query": f'''
                     mutation {{
@@ -71,14 +146,20 @@ async def handle_api_request(action, data):
                 '''
             }
             response = requests.post("http://graphql:8004/graphql", json=query, timeout=10)
-            return {"action": "delete_graphql", "success": True, "data": response.json()}
+            result = {"action": "delete_graphql", "success": True, "data": response.json()}
         
         else:
-            return {"action": action, "success": False, "error": "Unknown action"}
+            result = {"action": action, "success": False, "error": "Unknown action"}
+            
+        await websocket.send(json.dumps(result))
             
     except Exception as e:
         logger.error(f"Error handling API request {action}: {str(e)}")
-        return {"action": action, "success": False, "error": str(e)}
+        await websocket.send(json.dumps({
+            "action": action,
+            "success": False,
+            "error": str(e)
+        }))
 
 async def handle_websocket(websocket):
     """Handle individual WebSocket connections"""
@@ -90,12 +171,16 @@ async def handle_websocket(websocket):
                 logger.info(f"Received message from client: {data}")
                 
                 if "action" in data:
-                    # Handle API requests
-                    result = await handle_api_request(data["action"], data.get("data", {}))
-                    await websocket.send(json.dumps(result))
+                    action = data["action"]
+                    
+                    # Handle authentication
+                    if action == "auth":
+                        await handle_authentication(websocket, data.get("data", {}))
+                    else:
+                        # Handle API requests
+                        await handle_api_request(websocket, action, data.get("data", {}))
                 else:
-                    # Echo back for other messages
-                    await websocket.send(json.dumps({"echo": data}))
+                    await websocket.send(json.dumps({"error": "No action specified"}))
                     
             except json.JSONDecodeError:
                 await websocket.send(json.dumps({"error": "Invalid JSON"}))
@@ -147,14 +232,14 @@ def start_rabbitmq_consumer():
             channel.basic_qos(prefetch_count=1)
             channel.basic_consume(queue='product_updates', on_message_callback=on_message)
             logger.info('RabbitMQ consumer started, waiting for messages...')
-            retry_count = 0  # Reset retry count on successful connection
+            retry_count = 0
             channel.start_consuming()
             
         except Exception as e:
             retry_count += 1
             logger.error(f"RabbitMQ connection error (attempt {retry_count}): {str(e)}")
             if retry_count < max_retries:
-                wait_time = min(30, 5 * retry_count)  # Exponential backoff, max 30s
+                wait_time = min(30, 5 * retry_count)
                 logger.info(f"Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
             else:
@@ -162,14 +247,11 @@ def start_rabbitmq_consumer():
                 break
 
 async def main():
-    # Start WebSocket server with the new handler approach
     server = await websockets.serve(handle_websocket, "0.0.0.0", 6789)
     logger.info("WebSocket server started on ws://0.0.0.0:6789")
 
-    # Start RabbitMQ consumer in a separate thread
     threading.Thread(target=start_rabbitmq_consumer, daemon=True).start()
 
-    # Keep the server running
     await server.wait_closed()
 
 if __name__ == "__main__":
