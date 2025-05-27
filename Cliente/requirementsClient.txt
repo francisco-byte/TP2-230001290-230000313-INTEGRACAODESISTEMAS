@@ -1,0 +1,14 @@
+spyne
+lxml
+flask
+jsonschema
+grpcio
+grpcio-tools
+fastapi
+uvicorn
+strawberry-graphql
+pymongo
+websocket-client
+pika
+requests
+zeep
