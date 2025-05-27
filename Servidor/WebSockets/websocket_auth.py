@@ -5,33 +5,35 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 
 class OAuth2JWTAuthenticator:
+    """Autenticador OAuth2 + JWT para gestão de tokens de acesso e renovação"""
+    
     def __init__(self, secret_key: str, issuer: str = "produtos-api"):
-        self.secret_key = secret_key
-        self.issuer = issuer
-        self.audience = "produtos-client"
+        self.secret_key = secret_key  # Chave secreta para assinatura JWT
+        self.issuer = issuer  # Emissor dos tokens
+        self.audience = "produtos-client"  # Audiência dos tokens
         
     def generate_access_token(self, user_id: str, email: str, roles: List[str], permissions: List[str]) -> str:
-        """Generate OAuth2 JWT access token (RFC 7519)"""
+        """Gera token de acesso OAuth2 JWT conforme RFC 7519"""
         payload = {
             'user_id': user_id,
             'email': email,
             'roles': roles,
             'permissions': permissions,
-            'scope': ' '.join(permissions),  # OAuth2 scopes
-            'exp': datetime.utcnow() + timedelta(hours=24),
-            'iat': datetime.utcnow(),
-            'iss': self.issuer,  # Issuer
-            'aud': self.audience,  # Audience
+            'scope': ' '.join(permissions),  # Âmbitos OAuth2
+            'exp': datetime.utcnow() + timedelta(hours=24),  # Expira em 24 horas
+            'iat': datetime.utcnow(),  # Data de emissão
+            'iss': self.issuer,  # Emissor
+            'aud': self.audience,  # Audiência
             'token_type': 'access_token',
-            'jti': f"{user_id}_{int(datetime.utcnow().timestamp())}"  # JWT ID
+            'jti': f"{user_id}_{int(datetime.utcnow().timestamp())}"  # ID único do JWT
         }
         return jwt.encode(payload, self.secret_key, algorithm='HS256')
     
     def generate_refresh_token(self, user_id: str) -> str:
-        """Generate OAuth2 refresh token (RFC 6749)"""
+        """Gera token de renovação OAuth2 conforme RFC 6749"""
         payload = {
             'user_id': user_id,
-            'exp': datetime.utcnow() + timedelta(days=30),  # 30 days
+            'exp': datetime.utcnow() + timedelta(days=30),  # Expira em 30 dias
             'iat': datetime.utcnow(),
             'iss': self.issuer,
             'aud': self.audience,
@@ -41,7 +43,7 @@ class OAuth2JWTAuthenticator:
         return jwt.encode(payload, self.secret_key, algorithm='HS256')
     
     def verify_access_token(self, token: str) -> Optional[Dict]:
-        """Verify OAuth2 JWT access token"""
+        """Verifica e valida token de acesso OAuth2 JWT"""
         try:
             payload = jwt.decode(
                 token, 
@@ -51,22 +53,26 @@ class OAuth2JWTAuthenticator:
                 issuer=self.issuer
             )
             
-            # Ensure it's an access token
+            # Garante que é um token de acesso
             if payload.get('token_type') != 'access_token':
                 return None
                 
             return payload
         except jwt.ExpiredSignatureError:
+            # Token expirado
             return None
         except jwt.InvalidTokenError:
+            # Token inválido
             return None
         except jwt.InvalidAudienceError:
+            # Audiência incorrecta
             return None
         except jwt.InvalidIssuerError:
+            # Emissor incorrecto
             return None
     
     def verify_refresh_token(self, token: str) -> Optional[Dict]:
-        """Verify OAuth2 refresh token"""
+        """Verifica e valida token de renovação OAuth2"""
         try:
             payload = jwt.decode(
                 token, 
@@ -76,7 +82,7 @@ class OAuth2JWTAuthenticator:
                 issuer=self.issuer
             )
             
-            # Ensure it's a refresh token
+            # Garante que é um token de renovação
             if payload.get('token_type') != 'refresh_token':
                 return None
                 
@@ -91,17 +97,17 @@ class OAuth2JWTAuthenticator:
             return None
     
     def check_scope_permission(self, payload: Dict, required_scope: str) -> bool:
-        """Check if JWT token has required OAuth2 scope"""
+        """Verifica se o token JWT possui o âmbito OAuth2 necessário"""
         token_permissions = payload.get('permissions', [])
         return required_scope in token_permissions
 
 class OAuth2Provider:
-    """OAuth2 Authorization Server implementation (RFC 6749)"""
+    """Implementação de Servidor de Autorização OAuth2 conforme RFC 6749"""
     
     def __init__(self):
-        # Mock OAuth2 user database
-        # In production, this would integrate with external OAuth providers
-        # like Google, Microsoft, GitHub, Auth0, etc.
+        # Base de dados simulada de utilizadores OAuth2
+        # Em produção, integraria com fornecedores OAuth externos
+        # como Google, Microsoft, GitHub, Auth0, etc.
         self.users_db = {
             "admin": {
                 "password": "admin123",
@@ -129,37 +135,37 @@ class OAuth2Provider:
             }
         }
         
-        # OAuth2 scopes mapping (RFC 6749 Section 3.3)
+        # Mapeamento de âmbitos OAuth2 conforme RFC 6749 Secção 3.3
         self.role_scopes = {
             "admin": [
-                "create_product",    # Can create products
-                "read_product",      # Can read products
-                "update_product",    # Can update products
-                "delete_product",    # Can delete products
-                "admin_access"       # Administrative access
+                "create_product",    # Pode criar produtos
+                "read_product",      # Pode ler produtos
+                "update_product",    # Pode actualizar produtos
+                "delete_product",    # Pode eliminar produtos
+                "admin_access"       # Acesso administrativo
             ],
             "user": [
-                "create_product",    # Can create products
-                "read_product",      # Can read products
-                "update_product"     # Can update products
+                "create_product",    # Pode criar produtos
+                "read_product",      # Pode ler produtos
+                "update_product"     # Pode actualizar produtos
             ],
             "readonly": [
-                "read_product"       # Can only read products
+                "read_product"       # Pode apenas ler produtos
             ]
         }
     
     async def authenticate_user_password_grant(self, username: str, password: str, requested_scope: str = None) -> Optional[Dict]:
-        """OAuth2 Resource Owner Password Credentials Grant (RFC 6749 Section 4.3)"""
+        """Fluxo OAuth2 Resource Owner Password Credentials Grant conforme RFC 6749 Secção 4.3"""
         user = self.users_db.get(username)
         
         if user and user["password"] == password and user["active"]:
-            # Get user permissions based on roles
+            # Obtém permissões do utilizador baseadas nos papéis
             permissions = await self.get_user_permissions(user["roles"])
             
-            # Filter permissions based on requested scope
+            # Filtra permissões baseadas no âmbito solicitado
             if requested_scope:
                 requested_permissions = requested_scope.split()
-                # Only grant permissions that user has AND requested
+                # Apenas concede permissões que o utilizador tem E solicitou
                 granted_permissions = [p for p in requested_permissions if p in permissions]
             else:
                 granted_permissions = permissions
@@ -174,14 +180,14 @@ class OAuth2Provider:
         return None
     
     async def refresh_token_grant(self, refresh_token: str, jwt_auth: OAuth2JWTAuthenticator) -> Optional[Dict]:
-        """OAuth2 Refresh Token Grant (RFC 6749 Section 6)"""
+        """Fluxo OAuth2 Refresh Token Grant conforme RFC 6749 Secção 6"""
         payload = jwt_auth.verify_refresh_token(refresh_token)
         if not payload:
             return None
             
         user_id = payload.get('user_id')
         
-        # Find user by ID
+        # Procura utilizador pelo ID
         user = None
         for username, user_data in self.users_db.items():
             if user_data["user_id"] == user_id and user_data["active"]:
@@ -200,15 +206,15 @@ class OAuth2Provider:
         return None
     
     async def get_user_permissions(self, roles: List[str]) -> List[str]:
-        """Convert user roles to OAuth2 scopes/permissions"""
+        """Converte papéis de utilizador em âmbitos/permissões OAuth2"""
         permissions = set()
         for role in roles:
             permissions.update(self.role_scopes.get(role, []))
         return list(permissions)
     
     async def validate_client(self, client_id: str) -> bool:
-        """Validate OAuth2 client (RFC 6749 Section 2)"""
-        # In production, this would check registered OAuth2 clients
+        """Valida cliente OAuth2 conforme RFC 6749 Secção 2"""
+        # Em produção, verificaria clientes OAuth2 registados
         valid_clients = [
             "produtos_admin_client",
             "produtos_user_client", 
@@ -219,20 +225,21 @@ class OAuth2Provider:
         return client_id in valid_clients
     
     async def generate_authorization_code(self, user_id: str, client_id: str, scope: str) -> str:
-        """Generate OAuth2 authorization code for Authorization Code Grant (RFC 6749 Section 4.1)"""
-        # This would be used for web-based OAuth2 flows
+        """Gera código de autorização OAuth2 para Authorization Code Grant conforme RFC 6749 Secção 4.1"""
+        # Seria usado para fluxos OAuth2 baseados na web
         code_payload = {
             'user_id': user_id,
             'client_id': client_id,
             'scope': scope,
-            'exp': datetime.utcnow() + timedelta(minutes=10),  # Short-lived
+            'exp': datetime.utcnow() + timedelta(minutes=10),  # Vida curta
             'iat': datetime.utcnow(),
             'code_type': 'authorization_code'
         }
         return jwt.encode(code_payload, "auth_code_secret", algorithm='HS256')
 
-# OAuth2 error responses (RFC 6749 Section 5.2)
+# Respostas de erro OAuth2 conforme RFC 6749 Secção 5.2
 class OAuth2Error:
+    """Constantes para códigos de erro OAuth2 padronizados"""
     INVALID_REQUEST = "invalid_request"
     INVALID_CLIENT = "invalid_client" 
     INVALID_GRANT = "invalid_grant"
@@ -244,9 +251,9 @@ class OAuth2Error:
     SERVER_ERROR = "server_error"
     TEMPORARILY_UNAVAILABLE = "temporarily_unavailable"
 
-# Legacy compatibility functions (for existing code)
+# Funções de compatibilidade legada (para código existente)
 async def authenticate_user(credentials: dict) -> Optional[str]:
-    """Legacy function - use OAuth2Provider.authenticate_user_password_grant instead"""
+    """Função legada - usar OAuth2Provider.authenticate_user_password_grant"""
     oauth2_provider = OAuth2Provider()
     username = credentials.get('username')
     password = credentials.get('password')
@@ -257,13 +264,13 @@ async def authenticate_user(credentials: dict) -> Optional[str]:
     return None
 
 async def get_user_permissions(user_id: str) -> list:
-    """Legacy function - use OAuth2Provider.get_user_permissions instead"""
-    # Map user IDs to roles for backward compatibility
+    """Função legada - usar OAuth2Provider.get_user_permissions"""
+    # Mapeia IDs de utilizador para papéis para compatibilidade
     user_role_map = {
         "admin_001": ["admin", "user"],
         "user_001": ["user"], 
         "readonly_001": ["readonly"],
-        # Legacy IDs
+        # IDs legados
         "admin_user": ["admin", "user"],
         "regular_user": ["user"],
         "readonly_user": ["readonly"]
@@ -273,15 +280,15 @@ async def get_user_permissions(user_id: str) -> list:
     roles = user_role_map.get(user_id, [])
     return await oauth2_provider.get_user_permissions(roles)
 
-# WebSocketAuthenticator class for backward compatibility
+# Classe WebSocketAuthenticator para compatibilidade
 class WebSocketAuthenticator(OAuth2JWTAuthenticator):
-    """Legacy class - use OAuth2JWTAuthenticator instead"""
+    """Classe legada - usar OAuth2JWTAuthenticator"""
     
     def __init__(self, secret_key: str):
         super().__init__(secret_key)
     
     def generate_jwt_token(self, user_id: str, permissions: list) -> str:
-        """Legacy method - use generate_access_token instead"""
+        """Método legado - usar generate_access_token"""
         return self.generate_access_token(
             user_id=user_id,
             email=f"{user_id}@produtos.com",
@@ -290,9 +297,9 @@ class WebSocketAuthenticator(OAuth2JWTAuthenticator):
         )
     
     def verify_jwt_token(self, token: str) -> Optional[dict]:
-        """Legacy method - use verify_access_token instead"""
+        """Método legado - usar verify_access_token"""
         return self.verify_access_token(token)
     
     def check_permission(self, payload: dict, required_permission: str) -> bool:
-        """Legacy method - use check_scope_permission instead"""
+        """Método legado - usar check_scope_permission"""
         return self.check_scope_permission(payload, required_permission)

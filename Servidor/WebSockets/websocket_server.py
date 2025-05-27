@@ -8,19 +8,20 @@ import time
 import requests
 from websocket_auth import OAuth2JWTAuthenticator, OAuth2Provider
 
-# Set up logging
+# Configuração de logging para monitorização do sistema
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# OAuth2 + JWT setup
+# Configuração OAuth2 + JWT para autenticação e autorização
 jwt_auth = OAuth2JWTAuthenticator("your-super-secret-jwt-key-change-in-production")
 oauth2_provider = OAuth2Provider()
-connected_clients = {}
+connected_clients = {}  # Dicionário para gerir clientes conectados
 
 async def notify_clients(message):
+    """Notifica todos os clientes autenticados sobre actualizações do sistema"""
     if connected_clients:
         message_data = json.dumps(message)
-        # Only notify authenticated clients
+        # Apenas notifica clientes autenticados por segurança
         authenticated_clients = [ws for ws, info in connected_clients.items() 
                                if info.get('authenticated', False)]
         if authenticated_clients:
@@ -30,6 +31,7 @@ async def notify_clients(message):
             )
 
 async def register(websocket):
+    """Regista novo cliente WebSocket e envia informações de autenticação"""
     connected_clients[websocket] = {'authenticated': False}
     logger.info(f"Client connected: {websocket.remote_address}")
     await websocket.send(json.dumps({
@@ -40,6 +42,7 @@ async def register(websocket):
     }))
 
 async def unregister(websocket):
+    """Remove cliente da lista de conectados ao desconectar"""
     if websocket in connected_clients:
         client_info = connected_clients[websocket]
         if client_info.get('authenticated'):
@@ -48,15 +51,15 @@ async def unregister(websocket):
     logger.info(f"Client disconnected: {websocket.remote_address}")
 
 async def handle_oauth2_token_request(websocket, data):
-    """Handle OAuth2 token request (RFC 6749)"""
+    """Processa pedidos de token OAuth2 conforme RFC 6749"""
     try:
         grant_type = data.get('grant_type')
         
         if grant_type == 'password':
-            # OAuth2 Resource Owner Password Credentials Grant
+            # Fluxo OAuth2 Resource Owner Password Credentials Grant
             username = data.get('username')
             password = data.get('password')
-            scope = data.get('scope', 'read_product')  # OAuth2 scope
+            scope = data.get('scope', 'read_product')  # Âmbito OAuth2
             
             if not username or not password:
                 await websocket.send(json.dumps({
@@ -65,9 +68,10 @@ async def handle_oauth2_token_request(websocket, data):
                 }))
                 return
             
+            # Autentica utilizador e obtém permissões
             user_data = await oauth2_provider.authenticate_user_password_grant(username, password, scope)
             if user_data:
-                # Generate OAuth2 tokens
+                # Gera tokens OAuth2 JWT
                 access_token = jwt_auth.generate_access_token(
                     user_data['user_id'],
                     user_data['email'], 
@@ -76,7 +80,7 @@ async def handle_oauth2_token_request(websocket, data):
                 )
                 refresh_token = jwt_auth.generate_refresh_token(user_data['user_id'])
                 
-                # Store authenticated client
+                # Armazena informações do cliente autenticado
                 connected_clients[websocket] = {
                     'authenticated': True,
                     'user_id': user_data['user_id'],
@@ -87,11 +91,11 @@ async def handle_oauth2_token_request(websocket, data):
                     'refresh_token': refresh_token
                 }
                 
-                # OAuth2 token response (RFC 6749)
+                # Resposta de token OAuth2 conforme RFC 6749
                 await websocket.send(json.dumps({
                     "access_token": access_token,
                     "token_type": "Bearer",
-                    "expires_in": 86400,  # 24 hours
+                    "expires_in": 86400,  # 24 horas
                     "refresh_token": refresh_token,
                     "scope": ' '.join(user_data['permissions']),
                     "user_id": user_data['user_id'],
@@ -108,7 +112,7 @@ async def handle_oauth2_token_request(websocket, data):
                 return
                 
         elif grant_type == 'refresh_token':
-            # OAuth2 Refresh Token Grant
+            # Fluxo OAuth2 Refresh Token Grant para renovação de tokens
             refresh_token = data.get('refresh_token')
             
             if not refresh_token:
@@ -118,6 +122,7 @@ async def handle_oauth2_token_request(websocket, data):
                 }))
                 return
             
+            # Valida refresh token e gera novo access token
             user_data = await oauth2_provider.refresh_token_grant(refresh_token, jwt_auth)
             if user_data:
                 new_access_token = jwt_auth.generate_access_token(
@@ -127,7 +132,7 @@ async def handle_oauth2_token_request(websocket, data):
                     user_data['permissions']
                 )
                 
-                # Update client info with new token
+                # Actualiza token do cliente
                 if websocket in connected_clients:
                     connected_clients[websocket]['access_token'] = new_access_token
                 
@@ -159,19 +164,19 @@ async def handle_oauth2_token_request(websocket, data):
         }))
 
 async def verify_bearer_token(websocket, required_scope):
-    """Verify OAuth2 Bearer token and scope"""
+    """Verifica token Bearer OAuth2 e âmbito de permissões"""
     client_info = connected_clients.get(websocket)
     if not client_info or not client_info.get('authenticated'):
         return False, "access_denied", "Authentication required"
     
-    # Verify JWT access token
+    # Verifica token JWT de acesso
     access_token = client_info.get('access_token')
     if access_token:
         payload = jwt_auth.verify_access_token(access_token)
         if not payload:
             return False, "invalid_token", "Access token expired or invalid"
         
-        # Check OAuth2 scope
+        # Verifica âmbito OAuth2
         if jwt_auth.check_scope_permission(payload, required_scope):
             return True, None, None
         else:
@@ -180,9 +185,9 @@ async def verify_bearer_token(websocket, required_scope):
     return False, "invalid_token", "No access token provided"
 
 async def handle_api_request(websocket, action, data):
-    """Handle API requests with OAuth2 authorization"""
+    """Processa pedidos API com autorização OAuth2"""
     try:
-        # OAuth2 scope mapping
+        # Mapeamento de acções para âmbitos OAuth2
         scope_mapping = {
             "create_rest": "create_product",
             "list_soap": "read_product",
@@ -198,7 +203,7 @@ async def handle_api_request(websocket, action, data):
             }))
             return
         
-        # Verify OAuth2 authorization
+        # Verifica autorização OAuth2
         authorized, error_code, error_description = await verify_bearer_token(websocket, required_scope)
         if not authorized:
             await websocket.send(json.dumps({
@@ -208,19 +213,20 @@ async def handle_api_request(websocket, action, data):
             }))
             return
 
-        # Get user context
+        # Obtém contexto do utilizador
         client_info = connected_clients.get(websocket, {})
         user_id = client_info.get('user_id', 'unknown_user')
 
-        # Execute API calls
+        # Executa chamadas API conforme a acção solicitada
         if action == "create_rest":
-            # REST can handle user_id field directly
+            # REST API - adiciona user_id directamente aos dados
             data['user_id'] = user_id
             response = requests.post("http://rest:8001/create", json=data, timeout=10)
             result = {"action": "create_rest", "success": True, "data": response.json()}
         
         elif action == "list_soap":
             try:
+                # SOAP API - utiliza cliente Zeep para comunicação
                 from zeep import Client as SoapClient
                 client = SoapClient("http://soap:8002/?wsdl")
                 produtos = client.service.read_all()
@@ -235,11 +241,11 @@ async def handle_api_request(websocket, action, data):
         
         elif action == "update_grpc":
             try:
+                # gRPC API - filtra dados para o formato esperado pelo Produto message
                 import grpc
                 import produtos_pb2
                 import produtos_pb2_grpc
                 
-                # Filter data to only include fields that gRPC Produto message expects
                 grpc_data = {
                     "id": data.get("id"),
                     "name": data.get("name"), 
@@ -247,13 +253,13 @@ async def handle_api_request(websocket, action, data):
                     "stock": data.get("stock")
                 }
                 
-                # Remove None values
+                # Remove valores None para conformidade gRPC
                 grpc_data = {k: v for k, v in grpc_data.items() if v is not None}
                 
                 channel = grpc.insecure_channel('grpc:8003')
                 stub = produtos_pb2_grpc.ProdutoServiceStub(channel)
                 
-                # Send user_id via gRPC metadata
+                # Envia user_id via metadados gRPC
                 metadata = [('user_id', user_id)]
                 
                 req = produtos_pb2.Produto(**grpc_data)
@@ -272,6 +278,7 @@ async def handle_api_request(websocket, action, data):
                 result = {"action": "update_grpc", "success": False, "error": f"gRPC error: {str(grpc_error)}"}
         
         elif action == "delete_graphql":
+            # GraphQL API - constrói mutation query para eliminação
             query = {
                 "query": f'''
                     mutation {{
@@ -297,7 +304,7 @@ async def handle_api_request(websocket, action, data):
         }))
 
 async def handle_legacy_auth(websocket, data):
-    """Handle legacy authentication format for backward compatibility"""
+    """Processa autenticação legada para compatibilidade com versões anteriores"""
     try:
         auth_data = data.get('data', {})
         username = auth_data.get('username')
@@ -311,7 +318,7 @@ async def handle_legacy_auth(websocket, data):
             }))
             return
         
-        # Convert to OAuth2 format
+        # Converte para formato OAuth2
         oauth2_data = {
             "grant_type": "password",
             "username": username,
@@ -319,7 +326,7 @@ async def handle_legacy_auth(websocket, data):
             "scope": "read_product create_product update_product delete_product"
         }
         
-        # Use existing OAuth2 handler
+        # Utiliza processador OAuth2 existente
         await handle_oauth2_token_request(websocket, oauth2_data)
         
     except Exception as e:
@@ -331,7 +338,7 @@ async def handle_legacy_auth(websocket, data):
         }))
 
 async def handle_websocket(websocket):
-    """Handle WebSocket connections with OAuth2 + JWT"""
+    """Gere ligações WebSocket com autenticação OAuth2 + JWT"""
     await register(websocket)
     try:
         async for message in websocket:
@@ -340,13 +347,13 @@ async def handle_websocket(websocket):
                 logger.info(f"Received message: {data}")
                 
                 if "grant_type" in data:
-                    # OAuth2 token request
+                    # Pedido de token OAuth2
                     await handle_oauth2_token_request(websocket, data)
                 elif data.get("action") == "auth":
-                    # Legacy authentication format
+                    # Formato de autenticação legada
                     await handle_legacy_auth(websocket, data)
                 elif "action" in data:
-                    # API request (requires OAuth2 authorization)
+                    # Pedido API (requer autorização OAuth2)
                     action = data["action"]
                     await handle_api_request(websocket, action, data.get("data", {}))
                 else:
@@ -375,7 +382,7 @@ async def handle_websocket(websocket):
         await unregister(websocket)
 
 def rabbitmq_callback(message):
-    """Forward RabbitMQ message to WebSocket clients"""
+    """Reencaminha mensagens RabbitMQ para clientes WebSocket"""
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
@@ -386,6 +393,7 @@ def rabbitmq_callback(message):
         logger.error(f"Error in rabbitmq_callback: {str(e)}")
 
 def start_rabbitmq_consumer():
+    """Inicia consumidor RabbitMQ com tentativas de reconexão automática"""
     retry_count = 0
     max_retries = 10
     
@@ -400,6 +408,7 @@ def start_rabbitmq_consumer():
             channel.queue_declare(queue='product_updates', durable=True)
 
             def on_message(ch, method, properties, body):
+                """Processa mensagens recebidas do RabbitMQ"""
                 try:
                     message = json.loads(body)
                     logger.info(f"Received RabbitMQ message: {message}")
@@ -408,6 +417,7 @@ def start_rabbitmq_consumer():
                 except Exception as e:
                     logger.error(f"Error processing RabbitMQ message: {str(e)}")
 
+            # Configura QoS para processamento sequencial
             channel.basic_qos(prefetch_count=1)
             channel.basic_consume(queue='product_updates', on_message_callback=on_message)
             logger.info('RabbitMQ consumer started, waiting for messages...')
@@ -426,12 +436,15 @@ def start_rabbitmq_consumer():
                 break
 
 async def main():
+    """Função principal que inicia o servidor WebSocket e consumidor RabbitMQ"""
     server = await websockets.serve(handle_websocket, "0.0.0.0", 6789)
     logger.info("OAuth2 + JWT WebSocket server started on ws://0.0.0.0:6789")
 
+    # Inicia consumidor RabbitMQ numa thread separada
     threading.Thread(target=start_rabbitmq_consumer, daemon=True).start()
 
     await server.wait_closed()
 
 if __name__ == "__main__":
+    # Executa o servidor se o script for executado directamente
     asyncio.run(main())
