@@ -13,4 +13,5 @@ pika
 requests
 zeep
 PyJWT
+asyncio
 cryptography

@@ -23,23 +23,23 @@ def get_input():
         raise ValueError(f"Invalid input: {str(e)}")
 
 def authenticate():
-    """Handle user authentication"""
+    """Handle OAuth2 authentication"""
     if not ws_connection:
         mostrar_resposta({"error": "WebSocket not connected"})
         return
     
-    username = simpledialog.askstring("Login", "Username:")
-    password = simpledialog.askstring("Login", "Password:", show='*')
+    username = simpledialog.askstring("OAuth2 Login", "Username:")
+    password = simpledialog.askstring("OAuth2 Login", "Password:", show='*')
     
     if username and password:
-        auth_message = {
-            "action": "auth",
-            "data": {
-                "username": username,
-                "password": password
-            }
+        # OAuth2 Resource Owner Password Credentials Grant
+        oauth2_request = {
+            "grant_type": "password",
+            "username": username,
+            "password": password,
+            "scope": "read_product create_product update_product delete_product"
         }
-        ws_connection.send(json.dumps(auth_message))
+        ws_connection.send(json.dumps(oauth2_request))
 
 def send_ws_request(action, data=None):
     """Send request through WebSocket"""
@@ -109,7 +109,72 @@ def on_message(ws, message):
     try:
         data = json.loads(message)
         
-        if data.get("action") == "auth":
+        # Handle OAuth2 token response
+        if "access_token" in data and "token_type" in data:
+            # OAuth2 authentication successful
+            is_authenticated = True
+            current_user = data.get("user_id", "Unknown")
+            scope = data.get("scope", "")
+            user_permissions = scope.split() if scope else []
+            
+            update_auth_status("OAuth2 Authenticated")
+            update_user_info(f"User: {current_user}")
+            mostrar_resposta({
+                "oauth2_authentication": "Success",
+                "user_id": current_user,
+                "email": data.get("email", ""),
+                "scope": scope,
+                "permissions": user_permissions,
+                "token_type": data.get("token_type"),
+                "expires_in": f"{data.get('expires_in', 0)} seconds"
+            })
+            
+        # Handle OAuth2 permission/scope errors (for ALL services)
+        elif "error" in data and data.get("error") == "insufficient_scope":
+            # Permission denied but user is still authenticated
+            action = "Unknown"
+            if "required_scope" in data:
+                scope_to_action = {
+                    "create_product": "Create Product (REST)",
+                    "read_product": "List Products (SOAP)",
+                    "update_product": "Update Product (gRPC)",
+                    "delete_product": "Delete Product (GraphQL)"
+                }
+                action = scope_to_action.get(data["required_scope"], data["required_scope"])
+            
+            mostrar_resposta({
+                "permission_error": "Access Denied",
+                "action_attempted": action,
+                "error": data.get("error"),
+                "description": data.get("error_description", ""),
+                "required_scope": data.get("required_scope", ""),
+                "your_permissions": user_permissions,
+                "user_id": current_user,
+                "message": f"User '{current_user}' doesn't have required permission",
+                "suggestion": "Try logging in with 'admin' account for full access"
+            })
+            
+        # Handle OTHER OAuth2 errors (authentication failures)
+        elif "error" in data and "error_description" in data:
+            error_code = data.get("error")
+            # Only reset auth for actual authentication errors
+            if error_code in ["invalid_grant", "invalid_token", "access_denied", "invalid_request"]:
+                is_authenticated = False
+                update_auth_status("OAuth2 Error")
+                update_user_info("Authentication failed")
+                mostrar_resposta({
+                    "oauth2_error": error_code,
+                    "description": data.get("error_description")
+                })
+            else:
+                # Other errors (like server_error) don't reset authentication
+                mostrar_resposta({
+                    "api_error": error_code,
+                    "description": data.get("error_description")
+                })
+            
+        # Handle legacy auth response (backward compatibility)
+        elif data.get("action") == "auth":
             if data.get("success"):
                 is_authenticated = True
                 current_user = data.get("message", "").replace("Authenticated as ", "")
@@ -118,7 +183,7 @@ def on_message(ws, message):
                 update_auth_status("Authenticated")
                 update_user_info(f"User: {current_user}")
                 mostrar_resposta({
-                    "authentication": "Success",
+                    "legacy_authentication": "Success",
                     "user": current_user,
                     "permissions": user_permissions
                 })
@@ -126,11 +191,16 @@ def on_message(ws, message):
                 is_authenticated = False
                 update_auth_status("Failed")
                 update_user_info("Not logged in")
-                mostrar_resposta({"authentication": "Failed", "message": data.get("message")})
+                mostrar_resposta({"legacy_authentication": "Failed", "message": data.get("message")})
                 
+        # Handle API success responses
         elif "action" in data:
-            # API response
             mostrar_resposta(data)
+            
+        # Handle connection status
+        elif "status" in data:
+            mostrar_resposta({"connection_status": data})
+            
         else:
             # Other messages (notifications, etc.)
             mostrar_resposta({"websocket_update": data})
@@ -138,7 +208,7 @@ def on_message(ws, message):
     except json.JSONDecodeError:
         mostrar_resposta({"websocket_message": message})
     except Exception as e:
-        mostrar_resposta({"erro": f"Message parse error: {str(e)}"})
+        mostrar_resposta({"error": f"Message parse error: {str(e)}"})
 
 def on_error(ws, error):
     mostrar_resposta({"websocket_error": str(error)})
