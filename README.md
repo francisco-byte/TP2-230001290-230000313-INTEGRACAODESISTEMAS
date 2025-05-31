@@ -396,6 +396,12 @@ python3 Cliente/cliente_ui.py
 ---
 
 
+## 🎥 Video de demonstração
+O video de demonstração encontra-se na pasta Documentação por limites do github
+
+---
+
+
 ## 📋 Notas Técnicas
 
 - **Arquitetura**: Microserviços distribuídos
