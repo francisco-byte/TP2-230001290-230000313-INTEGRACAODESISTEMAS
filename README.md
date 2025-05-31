@@ -62,6 +62,9 @@ O sistema é composto por múltiplos servidores especializados distribuídos em 
 │   │   ├── app.py             # API GraphQL com Strawberry
 │   │   ├── Dockerfile         
 │   │   └── requirements.txt
+│   ├── RabbitMQ/              
+│   │   ├── Dockerfile             
+│   │   └── rabbitmq_integration.py
 │   └── WebSockets/
 │       ├── websocket_server.py # Servidor WebSocket com OAuth2/JWT
 │       ├── websocket_auth.py   # Sistema de autenticação
