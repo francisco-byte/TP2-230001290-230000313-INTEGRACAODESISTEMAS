@@ -2,7 +2,13 @@
 
 Este projeto consiste numa aplicação cliente-servidor desenvolvida em Python que permite gerir uma lista de produtos. A aplicação oferece funcionalidades para **visualizar, adicionar, remover e atualizar produtos**, sendo que cada produto possui um **ID, nome, preço e quantidade em stock**.
 
-O servidor disponibiliza diferentes formas de acesso aos dados através de múltiplas tecnologias: **REST, SOAP, gRPC e GraphQL**. O cliente comunica com o servidor através de uma **interface gráfica desenvolvida em Tkinter**, permitindo ao utilizador escolher o tipo de serviço a utilizar para realizar as operações CRUD (Create, Read, Update, Delete).
+O servidor disponibiliza diferentes formas de acesso aos dados através de múltiplas tecnologias: **REST, SOAP, gRPC, GraphQL e WebSockets**. O cliente comunica com o servidor através de uma **interface gráfica desenvolvida em Tkinter**, permitindo ao utilizador escolher o tipo de serviço a utilizar para realizar as operações CRUD (Create, Read, Update, Delete).
+
+---
+
+## 🏗️ Arquitetura Distribuída
+
+O sistema é composto por múltiplos servidores especializados, cada um implementando uma tecnologia de API diferente (REST, SOAP, gRPC, GraphQL, WebSockets). Estes servidores comunicam entre si e com o cliente através de protocolos específicos, orquestrados por Docker Compose para facilitar a implantação e escalabilidade. A integração entre servidores é realizada principalmente através de uma fila de mensagens RabbitMQ, garantindo comunicação assíncrona e desacoplada. A persistência dos dados é feita em MongoDB, acessado pelo servidor REST.
 
 ---
 
@@ -36,6 +42,15 @@ O servidor disponibiliza diferentes formas de acesso aos dados através de múlt
 │   │   ├── graphql_delete.py  # API GraphQL
 │   │   ├── Dockerfile.graphql 
 │   │   └── requirements.txt
+│   ├── rabbitmq/
+│   │   ├── rabbitmq_integration.py  # Integração RabbitMQ
+│   │   ├── Dockerfile
+│   ├── websockets/
+│   │   ├── websocket_auth.py  # Autenticação OAuth2 + JWT
+│   │   ├── websocket_server.py # Servidor WebSocket
+│   │   ├── Dockerfile
+│   │   ├── produtos_pb2_grpc.py
+│   │   ├── produtos_pb2.py
 │   └── shared/
 │       ├── produtos.json      # Dados persistentes
 │       └── schema.json
@@ -57,6 +72,9 @@ O servidor disponibiliza diferentes formas de acesso aos dados através de múlt
 - Strawberry (GraphQL)
 - Tkinter (GUI)
 - JSON (Persistência)
+- MongoDB (Persistência de dados)
+- RabbitMQ (Integração assíncrona entre servidores)
+- OAuth2 + JWT (Autenticação e autorização)
 - Docker & Docker Compose
 
 ---
@@ -113,6 +131,7 @@ python cliente.py
 | SOAP       | XML (WSDL)  | **Read Produto**   |
 | gRPC       | Protobuf    | **Update Produto** |
 | GraphQL    | Query/Mutation | **Remove Produto** |
+| WebSockets | WebSocket + OAuth2/JWT | **Operações CRUD autenticadas** |
 
 ---
 
@@ -208,9 +227,36 @@ python cliente.py
 
 ---
 
+### 🟪 WebSockets - Comunicação em Tempo Real com Autenticação
+
+- **URL**: `ws://localhost:6789`
+- Utiliza autenticação OAuth2 com tokens JWT para autorização.
+- Suporta operações CRUD via mensagens JSON autenticadas.
+- Integração com RabbitMQ para notificações em tempo real.
+
+---
+
+## 🔐 Autenticação
+
+A autenticação é implementada no servidor WebSockets utilizando OAuth2 com tokens JWT. O sistema suporta os fluxos de Resource Owner Password Credentials Grant e Refresh Token Grant conforme as RFCs 6749 e 7519. Os tokens incluem informações de papéis e permissões para controlo de acesso granular. Esta autenticação é usada para proteger as operações via WebSockets, garantindo que apenas utilizadores autorizados podem executar ações CRUD.
+
+---
+
+## 🔗 Integração entre Servidores
+
+A comunicação entre os diferentes servidores é realizada através de uma fila de mensagens RabbitMQ, que permite a troca assíncrona de mensagens e sincronização de estados entre os serviços. O servidor WebSockets consome mensagens da fila e notifica os clientes conectados em tempo real. Esta arquitetura desacoplada permite escalabilidade e resiliência do sistema.
+
+---
+
+## 🧪 Testes
+
+Embora não existam testes unitários formais implementados, o projeto inclui um vídeo demonstrativo na pasta `documentacao/` que mostra o funcionamento completo da aplicação, incluindo a interação com todas as APIs através da interface gráfica.
+
+---
+
 ## 🖥️ Cliente Tkinter
 
-Interface gráfica desenvolvida em `Tkinter` que permite utilizar as 4 APIs com os seguintes botões:
+Interface gráfica desenvolvida em `Tkinter` que permite utilizar as 5 APIs com os seguintes botões:
 
 | Ação             | Tecnologia | Função Tkinter              |
 |------------------|------------|-----------------------------|
@@ -218,6 +264,7 @@ Interface gráfica desenvolvida em `Tkinter` que permite utilizar as 4 APIs com 
 | Mostrar Produtos | SOAP       | `listar_produtos_soap()`    |
 | Atualizar Produto| gRPC       | `atualizar_produto_grpc()`  |
 | Remover Produto  | GraphQL    | `remover_produto_graphql()` |
+| Operações CRUD   | WebSockets | `operacoes_websocket()`     |
 
 ---
 
@@ -249,6 +296,21 @@ services:
       - "8003:8003"
     volumes:
       - ./Servidor/shared:/shared  
+  websockets:
+    build: ./Servidor/WebSockets
+    ports:
+      - "6789:6789"
+    volumes:
+      - ./Servidor/shared:/shared
+  rabbitmq:
+    build: ./Servidor/RabbitMQ
+    ports:
+      - "5672:5672"
+    volumes:
+      - ./Servidor/shared:/shared
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
   shared:
     image: alpine
     volumes:
@@ -256,10 +318,10 @@ services:
     command: tail -f /dev/null
 ```
 
+---
 
-🎥 Demonstração em Vídeo
-Dentro da pasta documentacao/ encontra-se um vídeo demonstrativo que mostra o funcionamento completo da aplicação, incluindo a interação com todas as APIs através da interface gráfica.
-
+🎥 Demonstração em Vídeo  
+Dentro da pasta `documentacao/` encontra-se um vídeo demonstrativo que mostra o funcionamento completo da aplicação, incluindo a interação com todas as APIs através da interface gráfica.
 
 ---
 

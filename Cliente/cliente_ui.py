@@ -255,7 +255,7 @@ def start_websocket():
     """Inicia a ligação WebSocket com o servidor"""
     global ws_connection
     try:
-        ws = websocket.WebSocketApp("ws://localhost:6789/",
+        ws = websocket.WebSocketApp("ws://192.168.246.46:6789/",
                                     on_message=on_message,
                                     on_error=on_error,
                                     on_close=on_close)
