@@ -110,6 +110,7 @@ O sistema é composto por múltiplos servidores especializados distribuídos em 
 - Python 3.10+
 - SSH configurado
 - XMING (para acesso gráfico remoto)
+- Bibliotecas necessárias (Estão num ficheiro chamado de requirementsClient.txt)
 
 ### ▶️ Execução
 
@@ -132,6 +133,14 @@ set DISPLAY=localhost:0.0
 
 # Conectar via SSH com forwarding X11
 ssh -Y ubuntu@192.168.246.44
+
+# Clonar o repositório
+git clone <url-do-repositorio>
+cd <nome-do-projeto>
+cd Cliente
+
+# Instalar as bibliotecas
+python3 -m pip install requirementsClient.txt
 
 # Executar o cliente gráfico
 python3 Cliente/cliente_ui.py
