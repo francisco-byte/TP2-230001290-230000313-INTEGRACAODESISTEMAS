@@ -1,14 +1,24 @@
-# 🧠 Projeto: Sistema Cliente-Servidor para Gestão de Produtos com Múltiplas APIs e Interface Gráfica
+# 🧠 Sistema Cliente-Servidor para Gestão de Produtos com Múltiplas APIs e Interface Gráfica
 
-Este projeto consiste numa aplicação cliente-servidor desenvolvida em Python que permite gerir uma lista de produtos. A aplicação oferece funcionalidades para **visualizar, adicionar, remover e atualizar produtos**, sendo que cada produto possui um **ID, nome, preço e quantidade em stock**.
+Este projeto consiste numa aplicação cliente-servidor desenvolvida em Python que permite gerir uma lista de produtos de forma distribuída. A aplicação oferece funcionalidades para **visualizar, adicionar, remover e atualizar produtos**, sendo que cada produto possui um **ID, nome, preço e quantidade em stock**.
 
-O servidor disponibiliza diferentes formas de acesso aos dados através de múltiplas tecnologias: **REST, SOAP, gRPC, GraphQL e WebSockets**. O cliente comunica com o servidor através de uma **interface gráfica desenvolvida em Tkinter**, permitindo ao utilizador escolher o tipo de serviço a utilizar para realizar as operações CRUD (Create, Read, Update, Delete).
+O sistema utiliza uma arquitetura distribuída com **servidores em máquinas separadas** e oferece diferentes formas de acesso aos dados através de múltiplas tecnologias: **REST, SOAP, gRPC, GraphQL e WebSockets**. O cliente comunica com os servidores através de uma **interface gráfica desenvolvida em Tkinter com acesso remoto via SSH**.
 
 ---
 
 ## 🏗️ Arquitetura Distribuída
 
-O sistema é composto por múltiplos servidores especializados, cada um implementando uma tecnologia de API diferente (REST, SOAP, gRPC, GraphQL, WebSockets). Estes servidores comunicam entre si e com o cliente através de protocolos específicos, orquestrados por Docker Compose para facilitar a implantação e escalabilidade. A integração entre servidores é realizada principalmente através de uma fila de mensagens RabbitMQ, garantindo comunicação assíncrona e desacoplada. A persistência dos dados é feita em MongoDB, acessado pelo servidor REST.
+O sistema é composto por múltiplos servidores especializados distribuídos em duas máquinas:
+
+- **Servidor (192.168.246.46)**: Executa todos os serviços backend (REST, SOAP, gRPC, GraphQL, WebSockets)
+- **Cliente (192.168.246.44)**: Executa a interface gráfica Tkinter com acesso remoto via SSH
+
+### Componentes da Arquitetura:
+- **MongoDB**: Base de dados NoSQL para persistência dos produtos
+- **RabbitMQ**: Sistema de mensagens para comunicação assíncrona entre serviços
+- **OAuth2 + JWT**: Sistema de autenticação e autorização
+- **Docker Compose**: Orquestração de todos os serviços backend
+- **XMING + SSH**: Acesso remoto à interface gráfica
 
 ---
 
@@ -16,122 +26,117 @@ O sistema é composto por múltiplos servidores especializados, cada um implemen
 
 ```
 .
-├── cliente/                   # Interface gráfica Tkinter
-│   ├── cliente.py
-│   ├── produtos_pb2_grpc.py   # Define os serviços
-│   └── produtos_pb2.py        # Define os produtos
-|
-├── servidor/                 # Implementação dos serviços
-│   ├── rest/
-│   │   ├── app.py             # API REST
-│   │   ├── Dockerfile.rest    
+├── Cliente/                   # Interface gráfica Tkinter (máquina .44)
+│   ├── cliente_ui.py          # Interface principal
+│   ├── produtos_pb2_grpc.py   # Definições gRPC
+│   └── produtos_pb2.py        # Protobuf gerado
+│
+├── Servidor/                  # Serviços backend (máquina .46)
+│   ├── REST/
+│   │   ├── app.py             # API REST com FastAPI
+│   │   ├── Dockerfile         
 │   │   └── requirements.txt
-│   ├── soap/
-│   │   ├── app.py             # API SOAP
-│   │   ├── Dockerfile.soap    
+│   ├── SOAP/
+│   │   ├── app.py             # API SOAP com Spyne
+│   │   ├── Dockerfile         
 │   │   ├── schema.xsd         
 │   │   └── requirements.txt
-│   ├── grpc/
+│   ├── GRPC/
 │   │   ├── app.py             # Servidor gRPC
 │   │   ├── produtos.proto     
 │   │   ├── produtos_pb2_grpc.py
 │   │   ├── produtos_pb2.py
-│   │   ├── Dockerfile.grpc    
+│   │   ├── Dockerfile         
 │   │   └── requirements.txt
-│   ├── graphql/
-│   │   ├── graphql_delete.py  # API GraphQL
-│   │   ├── Dockerfile.graphql 
+│   ├── GraphQL/
+│   │   ├── app.py             # API GraphQL com Strawberry
+│   │   ├── Dockerfile         
 │   │   └── requirements.txt
-│   ├── rabbitmq/
-│   │   ├── rabbitmq_integration.py  # Integração RabbitMQ
-│   │   ├── Dockerfile
-│   ├── websockets/
-│   │   ├── websocket_auth.py  # Autenticação OAuth2 + JWT
-│   │   ├── websocket_server.py # Servidor WebSocket
-│   │   ├── Dockerfile
-│   │   ├── produtos_pb2_grpc.py
-│   │   ├── produtos_pb2.py
-│   └── shared/
-│       ├── produtos.json      # Dados persistentes
-│       └── schema.json
-├── documentacao/
-│   └── README.md              # Este ficheiro
-└── docker-compose.yml         # Orquestração dos serviços
+│   └── WebSockets/
+│       ├── websocket_server.py # Servidor WebSocket com OAuth2/JWT
+│       ├── websocket_auth.py   # Sistema de autenticação
+│       ├── Dockerfile
+│       └── requirements.txt
+├── docker-compose.yml         # Orquestração completa dos serviços
+└── README.md                  # Este documento
 ```
 
 ---
 
 ## 🚀 Tecnologias Utilizadas
 
-- Python 3.10+
-- FastAPI (REST)
-- Uvicorn (ASGI)
-- Flask (REST)
-- Spyne (SOAP)
-- gRPC + Protobuf (RPC)
-- Strawberry (GraphQL)
-- Tkinter (GUI)
-- JSON (Persistência)
-- MongoDB (Persistência de dados)
-- RabbitMQ (Integração assíncrona entre servidores)
-- OAuth2 + JWT (Autenticação e autorização)
-- Docker & Docker Compose
+### Backend
+- **Python 3.10+**
+- **FastAPI** (REST API)
+- **Spyne** (SOAP API)
+- **gRPC + Protobuf** (RPC)
+- **Strawberry GraphQL** (GraphQL API)
+- **WebSockets** (Comunicação em tempo real)
+- **MongoDB** (Base de dados NoSQL)
+- **RabbitMQ** (Sistema de mensagens)
+- **OAuth2 + JWT** (Autenticação e autorização)
+- **Docker & Docker Compose** (Containerização)
+
+### Cliente
+- **Tkinter** (Interface gráfica)
+- **XMING** (Servidor X11 para Windows)
+- **SSH** (Acesso remoto)
 
 ---
 
-## ⚙️ Como Correr o Projeto
+## ⚙️ Como Executar o Projeto
 
 ### 🔧 Pré-requisitos
 
+#### Servidor (192.168.246.46)
 - Docker
+- Docker Compose
 - Python 3.10+
 
-### ▶️ Com Docker
+#### Cliente (192.168.246.44)
+- Python 3.10+
+- SSH configurado
+- XMING (para acesso gráfico remoto)
+
+### ▶️ Execução
+
+#### 1. No Servidor (192.168.246.46)
 
 ```bash
+# Clonar o repositório
+git clone <url-do-repositorio>
+cd <nome-do-projeto>
+
+# Executar todos os serviços com Docker Compose
 docker-compose up --build
 ```
 
-### 🧪 Manualmente
-
-#### 1. Servidores
+#### 2. No Cliente (192.168.246.44)
 
 ```bash
-# REST
-cd servidor/rest
-python app.py
+# No Windows, abrir Command Prompt e configurar o DISPLAY
+set DISPLAY=localhost:0.0
 
-# SOAP
-cd servidor/soap
-python app.py
+# Conectar via SSH com forwarding X11
+ssh -Y ubuntu@192.168.246.44
 
-# gRPC
-cd servidor/grpc
-python app.py
-
-# GraphQL
-cd servidor/graphql
-python graphql_delete.py
-```
-
-#### 2. Cliente
-
-```bash
-cd cliente
-python cliente.py
+# Executar o cliente gráfico
+python3 Cliente/cliente_ui.py
 ```
 
 ---
 
-## 📡 Funcionalidades por API
+## 📡 Arquitetura de Serviços
 
-| Tecnologia | Tipo de API | Operação  |
-|------------|-------------|-----------|
-| REST       | HTTP (JSON) | **Create Produto** |
-| SOAP       | XML (WSDL)  | **Read Produto**   |
-| gRPC       | Protobuf    | **Update Produto** |
-| GraphQL    | Query/Mutation | **Remove Produto** |
-| WebSockets | WebSocket + OAuth2/JWT | **Operações CRUD autenticadas** |
+| Tecnologia | Porta | Operação Principal | Descrição |
+|------------|-------|-------------------|-----------|
+| **REST** | 8001 | Create Produto | API RESTful para criação de produtos |
+| **SOAP** | 8002 | Read Produtos | Serviço SOAP para listagem de produtos |
+| **gRPC** | 8003 | Update Produto | Serviço gRPC para atualização de produtos |
+| **GraphQL** | 8004 | Delete Produto | API GraphQL para remoção de produtos |
+| **WebSockets** | 6789 | CRUD Autenticado | Operações em tempo real com autenticação |
+| **MongoDB** | 27017 | Base de Dados | Persistência de dados |
+| **RabbitMQ** | 5672/15672 | Mensagens | Comunicação assíncrona |
 
 ---
 
@@ -139,7 +144,7 @@ python cliente.py
 
 ### 🟩 REST - Criar Produto
 
-- **URL**: `http://localhost:8001/create`
+- **URL**: `http://192.168.246.46:8001/create`
 - **Método**: `POST`
 - **Body**:
   ```json
@@ -150,183 +155,240 @@ python cliente.py
     "stock": 100
   }
   ```
-- **Resposta**:
-  ```json
-  {
-    "mensagem": "Produto Produto Exemplo criado com sucesso!"
-  }
-  ```
 
----
+### 🟦 SOAP - Listar Produtos
 
-### 🟦 SOAP - Listar Todos os Produtos
-
-- **URL**: `http://localhost:8002/?wsdl`
+- **URL**: `http://192.168.246.46:8002/?wsdl`
 - **Operação**: `read_all()`
-- **Resposta**: JSON como string:
-  ```json
-  [
-    {
-      "id": 1,
-      "name": "Produto Exemplo",
-      "price": 20.5,
-      "stock": 100
-    }
-  ]
-  ```
-
----
+- **Resposta**: Lista de produtos em formato JSON
 
 ### 🟨 gRPC - Atualizar Produto
 
-- **Host**: `localhost:8003`
+- **Host**: `192.168.246.46:8003`
 - **Serviço**: `UpdateProduto`
-- **Protobuf**:
-  ```proto
-  message Produto {
-      int32 id = 1;
-      string name = 2;
-      double price = 3;
-      int32 stock = 4;
-  }
-
-  message Resposta {
-      string mensagem = 1;
-  }
-
-  service ProdutoService {
-      rpc UpdateProduto(Produto) returns (Resposta);
-  }
-  ```
-- **Exemplo de uso em Python**:
-  ```python
-  produto = produtos_pb2.Produto(id=1, name="Atualizado", price=99.0, stock=10)
-  resposta = stub.UpdateProduto(produto)
-  print(resposta.mensagem)
-  ```
-
----
+- **Protobuf**: Definido em `produtos.proto`
 
 ### 🟥 GraphQL - Remover Produto
 
-- **URL**: `http://localhost:8004/graphql`
+- **URL**: `http://192.168.246.46:8004/graphql`
 - **Mutation**:
   ```graphql
   mutation {
     deleteProduto(id: 1)
   }
   ```
-- **Resposta**:
-  ```json
-  {
-    "data": {
-      "deleteProduto": "Produto com ID 1 removido com sucesso."
-    }
-  }
-  ```
+
+### 🟪 WebSockets - Operações Autenticadas
+
+- **URL**: `ws://192.168.246.46:6789`
+- **Autenticação**: OAuth2 + JWT
+- **Operações**: CRUD completas em tempo real
 
 ---
 
-### 🟪 WebSockets - Comunicação em Tempo Real com Autenticação
+## 🔐 Sistema de Autenticação
 
-- **URL**: `ws://localhost:6789`
-- Utiliza autenticação OAuth2 com tokens JWT para autorização.
-- Suporta operações CRUD via mensagens JSON autenticadas.
-- Integração com RabbitMQ para notificações em tempo real.
+O sistema implementa autenticação OAuth2 com tokens JWT no serviço WebSockets:
 
----
-
-## 🔐 Autenticação
-
-A autenticação é implementada no servidor WebSockets utilizando OAuth2 com tokens JWT. O sistema suporta os fluxos de Resource Owner Password Credentials Grant e Refresh Token Grant conforme as RFCs 6749 e 7519. Os tokens incluem informações de papéis e permissões para controlo de acesso granular. Esta autenticação é usada para proteger as operações via WebSockets, garantindo que apenas utilizadores autorizados podem executar ações CRUD.
+- **Fluxos suportados**: Resource Owner Password Credentials Grant e Refresh Token Grant
+- **Conformidade**: RFCs 6749 e 7519
+- **Características**: Controlo de acesso granular com papéis e permissões
+- **Integração**: RabbitMQ para notificações em tempo real
 
 ---
 
-## 🔗 Integração entre Servidores
+## 🔗 Integração e Comunicação
 
-A comunicação entre os diferentes servidores é realizada através de uma fila de mensagens RabbitMQ, que permite a troca assíncrona de mensagens e sincronização de estados entre os serviços. O servidor WebSockets consome mensagens da fila e notifica os clientes conectados em tempo real. Esta arquitetura desacoplada permite escalabilidade e resiliência do sistema.
+### RabbitMQ
+- **Comunicação assíncrona** entre todos os serviços
+- **Notificações em tempo real** via WebSockets
+- **Arquitetura desacoplada** para escalabilidade
 
----
-
-## 🧪 Testes
-
-Embora não existam testes unitários formais implementados, o projeto inclui um vídeo demonstrativo na pasta `documentacao/` que mostra o funcionamento completo da aplicação, incluindo a interação com todas as APIs através da interface gráfica.
-
----
-
-## 🖥️ Cliente Tkinter
-
-Interface gráfica desenvolvida em `Tkinter` que permite utilizar as 5 APIs com os seguintes botões:
-
-| Ação             | Tecnologia | Função Tkinter              |
-|------------------|------------|-----------------------------|
-| Criar Produto    | REST       | `criar_produto_rest()`      |
-| Mostrar Produtos | SOAP       | `listar_produtos_soap()`    |
-| Atualizar Produto| gRPC       | `atualizar_produto_grpc()`  |
-| Remover Produto  | GraphQL    | `remover_produto_graphql()` |
-| Operações CRUD   | WebSockets | `operacoes_websocket()`     |
+### MongoDB
+- **Persistência centralizada** de todos os produtos
+- **Acesso através** do servidor REST principalmente
+- **Sincronização** via RabbitMQ
 
 ---
 
-## 📦 Docker Compose
+## 🖥️ Interface Cliente
+
+A interface gráfica Tkinter oferece acesso a todas as APIs:
+
+| Botão | Tecnologia | Função |
+|-------|------------|--------|
+| Criar Produto | REST | `criar_produto_rest()` |
+| Listar Produtos | SOAP | `listar_produtos_soap()` |
+| Atualizar Produto | gRPC | `atualizar_produto_grpc()` |
+| Remover Produto | GraphQL | `remover_produto_graphql()` |
+| Operações WebSocket | WebSockets | `operacoes_websocket()` |
+
+---
+
+## 📦 Configuração Docker Compose
 
 ```yaml
+version: '3.8'
+
 services:
-  rest:
-    build: ./Servidor/REST
+  mongodb:
+    image: mongo:4.4
     ports:
-      - "8001:8001"
+      - "27017:27017"
     volumes:
-      - ./Servidor/shared:/shared  
-  soap:
-    build: ./Servidor/SOAP
-    ports:
-      - "8002:8002"
-    volumes:
-      - ./Servidor/shared:/shared  
-  graphql:
-    build: ./Servidor/GraphQL
-    ports:
-      - "8004:8004"
-    volumes:
-      - ./Servidor/shared:/shared  
-  grpc:
-    build: ./Servidor/GRPC
-    ports:
-      - "8003:8003"
-    volumes:
-      - ./Servidor/shared:/shared  
-  websockets:
-    build: ./Servidor/WebSockets
-    ports:
-      - "6789:6789"
-    volumes:
-      - ./Servidor/shared:/shared
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: produtos_db
+    restart: unless-stopped
+
   rabbitmq:
-    build: ./Servidor/RabbitMQ
+    image: rabbitmq:3.13-management
     ports:
       - "5672:5672"
-    volumes:
-      - ./Servidor/shared:/shared
+      - "15672:15672"
     environment:
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=admin
-  shared:
-    image: alpine
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
     volumes:
-      - ./Servidor/shared:/shared
-    command: tail -f /dev/null
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  rest:
+    build:
+      context: ./Servidor
+      dockerfile: REST/Dockerfile
+    ports:
+      - "8001:8001"
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  soap:
+    build:
+      context: ./Servidor
+      dockerfile: SOAP/Dockerfile
+    ports:
+      - "8002:8002"
+    depends_on:
+      - mongodb
+      - rabbitmq
+      
+  graphql:
+    build:
+      context: ./Servidor
+      dockerfile: GraphQL/Dockerfile
+    ports:
+      - "8004:8004"
+    depends_on:
+      - mongodb
+      - rabbitmq
+      
+  grpc:
+    build:
+      context: ./Servidor
+      dockerfile: GRPC/Dockerfile
+    ports:
+      - "8003:8003"
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  websocket:
+    build:
+      context: ./Servidor
+      dockerfile: WebSockets/Dockerfile
+    ports:
+      - "6789:6789"
+    depends_on:
+      - rest
+      - soap
+      - graphql
+      - grpc
+      - rabbitmq
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  rabbitmq_data:
 ```
 
 ---
 
-🎥 Demonstração em Vídeo  
-Dentro da pasta `documentacao/` encontra-se um vídeo demonstrativo que mostra o funcionamento completo da aplicação, incluindo a interação com todas as APIs através da interface gráfica.
+## 🌐 Configuração de Rede
+
+### Servidor (192.168.246.46)
+- Executa todos os serviços backend
+- MongoDB na porta 27017
+- RabbitMQ nas portas 5672 e 15672
+- APIs nas portas 8001-8004 e WebSocket na 6789
+
+### Cliente (192.168.246.44)
+- Executa apenas a interface gráfica
+- Acesso remoto via SSH com X11 forwarding
+- Comunicação com servidor via rede
+
+### Acesso Remoto
+```bash
+# Configurar DISPLAY no Windows
+set DISPLAY=localhost:0.0
+
+# Conectar com SSH e X11 forwarding
+ssh -Y ubuntu@192.168.246.44
+
+# Executar cliente
+python3 Cliente/cliente_ui.py
+```
 
 ---
 
-## 👤 Autores
+## 🔧 Troubleshooting
 
-Projeto desenvolvido por **Francisco Carvalho dos Reis** e **Ricardo Félix da Silva**, no contexto da disciplina de **Integração de Sistemas** do Instituto Politécnico de Santarém.
+### Problemas Comuns
+
+1. **Erro de conexão gráfica**:
+   - Verificar se XMING está a executar
+   - Confirmar configuração `DISPLAY=localhost:0.0`
+
+2. **Falha na conexão com serviços**:
+   - Verificar se Docker Compose está a executar no servidor
+   - Confirmar conectividade de rede entre máquinas
+
+3. **Erro de autenticação WebSocket**:
+   - Verificar tokens JWT
+   - Confirmar configuração OAuth2
 
 ---
+
+## 🧪 Testes e Monitorização
+
+### RabbitMQ Management
+- **URL**: `http://192.168.246.46:15672`
+- **Credenciais**: admin/admin
+- **Funcionalidade**: Monitorização de filas e mensagens
+
+### MongoDB
+- **Porta**: `27017`
+- **Base de dados**: `produtos_db`
+- **Acesso**: Via clientes MongoDB
+
+---
+
+## 👥 Autores
+
+Projeto desenvolvido por:
+- **Francisco Carvalho dos Reis**
+- **Ricardo Félix da Silva**
+
+**Contexto**: Disciplina de Integração de Sistemas - Instituto Politécnico de Santarém
+
+---
+
+## 📋 Notas Técnicas
+
+- **Arquitetura**: Microserviços distribuídos
+- **Comunicação**: REST, SOAP, gRPC, GraphQL, WebSockets
+- **Persistência**: MongoDB
+- **Mensagens**: RabbitMQ
+- **Autenticação**: OAuth2 + JWT
+- **Containerização**: Docker + Docker Compose
+- **Interface**: Tkinter com acesso remoto via SSH
