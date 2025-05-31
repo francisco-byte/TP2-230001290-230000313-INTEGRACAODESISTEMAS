@@ -6,6 +6,16 @@ O sistema utiliza uma arquitetura distribuída com **servidores em máquinas sep
 
 ---
 
+## 👥 Autores
+
+Projeto desenvolvido por:
+- **Francisco Carvalho dos Reis**
+- **Ricardo Félix da Silva**
+
+**Contexto**: Disciplina de Integração de Sistemas - Instituto Politécnico de Santarém
+
+---
+
 ## 🏗️ Arquitetura Distribuída
 
 O sistema é composto por múltiplos servidores especializados distribuídos em duas máquinas:
@@ -373,15 +383,6 @@ python3 Cliente/cliente_ui.py
 
 ---
 
-## 👥 Autores
-
-Projeto desenvolvido por:
-- **Francisco Carvalho dos Reis**
-- **Ricardo Félix da Silva**
-
-**Contexto**: Disciplina de Integração de Sistemas - Instituto Politécnico de Santarém
-
----
 
 ## 📋 Notas Técnicas
 
